@@ -1,0 +1,679 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Anti-Theft Sentinel — Dashboard</title>
+
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+
+  <style>
+    :root{
+      --bg:#0b1220;
+      --card:#0f1a2e;
+      --muted:#d6e0f2;
+      --muted2:#b9c7e2;
+    }
+    body { background: var(--bg); color: #fff; padding-top: 76px; }
+    .t-muted { color: var(--muted) !important; }
+    .t-muted2 { color: var(--muted2) !important; }
+    .cardish { background: var(--card); border: 1px solid rgba(255,255,255,.10); color: #fff}
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+    .accordion-button { background: rgba(255,255,255,.04); color:#fff; }
+    .accordion-button:not(.collapsed) { background: rgba(255,255,255,.07); color:#fff; }
+    .accordion-body { background: var(--card); }
+    .kv { display:flex; justify-content:space-between; gap:1rem; padding:.45rem 0; border-bottom: 1px dashed rgba(255,255,255,.14); }
+    .kv:last-child { border-bottom: 0; }
+    .status-pill { border-radius: 999px; padding: .35rem .6rem; border: 1px solid rgba(255,255,255,.14); }
+    .badge-grow { display: inline-flex; align-items:center; gap:.5rem; }
+    .grow-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; animation: grow 1.2s infinite ease-in-out; }
+    @keyframes grow { 0%{transform:scale(.7);opacity:.5} 50%{transform:scale(1.2);opacity:1} 100%{transform:scale(.7);opacity:.5} }
+    .dot-green{background:#22c55e}
+    .dot-orange{background:#f59e0b}
+    .dot-red{background:#ef4444}
+    .btn-grow { position: relative; overflow: hidden; }
+    .btn-grow::after{
+      content:""; position:absolute; inset:0;
+      background: radial-gradient(circle at 30% 30%, rgba(255,255,255,.18), transparent 55%);
+      opacity:0; transition:opacity .2s ease;
+    }
+    .btn-grow:hover::after{ opacity:1; }
+
+    .jumbo {
+      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02));
+      border: 1px solid rgba(255,255,255,.12);
+      border-radius: 16px;
+      padding: 1rem;
+    }
+
+    /* Petite aide visuelle: on masque certains blocs dynamiques si besoin */
+    .d-none { display:none !important; }
+  </style>
+</head>
+
+<body>
+  <!-- Header fixe -->
+  <nav class="navbar fixed-top navbar-dark" style="background: rgba(10,16,30,.92); backdrop-filter: blur(10px); border-bottom: 1px solid rgba(255,255,255,.10);">
+    <div class="container-fluid">
+      <div class="d-flex flex-column">
+        <span class="navbar-brand mb-0 h1">Anti-Theft Sentinel</span>
+        <small class="t-muted2">Dernière activité : <span id="lastActivity" class="mono">--</span></small>
+      </div>
+
+      <div class="d-flex align-items-center gap-2">
+        <!-- Statut alerte -->
+        <span class="status-pill badge-grow">
+          <span id="pillAlertDot" class="grow-dot dot-orange"></span>
+          <span id="pillAlertText" class="small">Inconnu</span>
+        </span>
+
+        <!-- Statut connexion dashboard -->
+        <span class="status-pill badge-grow">
+          <span id="pillDashDot" class="grow-dot dot-orange"></span>
+          <span id="pillDashText" class="small">Connexion…</span>
+        </span>
+      </div>
+    </div>
+  </nav>
+
+  <main class="container pb-5">
+
+    <!-- Bande résumé -->
+    <div class="alert alert-secondary cardish mt-3 mb-3" role="alert">
+      <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <div>
+          <strong>Mode :</strong> <span id="modeText" class="mono">--</span> ·
+          <strong>État :</strong> <span id="armedText" class="mono">--</span>
+        </div>
+
+        <!-- Bouton acquitter : rouge si alerte active, sinon désactivé -->
+        <button id="btnAck" class="btn btn-outline-secondary btn-sm btn-grow" type="button" disabled>
+          Aucune alerte
+        </button>
+      </div>
+      <div class="mt-2 t-muted2">
+        Astuce : “Acquitter” stoppe l’alerte en cours et met à jour l’état “Alerte”.
+      </div>
+    </div>
+
+    <div class="accordion" id="sentinelAccordion">
+
+      <!-- A) Commandes -->
+      <div class="accordion-item cardish">
+        <h2 class="accordion-header" id="headingCmd">
+          <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapseCmd" aria-expanded="true" aria-controls="collapseCmd">
+            🎛️ Commandes de l’anti-vol
+          </button>
+        </h2>
+        <div id="collapseCmd" class="accordion-collapse collapse show" aria-labelledby="headingCmd" data-bs-parent="#sentinelAccordion">
+          <div class="accordion-body">
+            <div class="d-flex flex-column gap-3">
+
+              <div class="card cardish p-3">
+                <div class="d-flex justify-content-between align-items-center">
+                  <div>
+                    <div class="fw-semibold">Armement</div>
+                    <small class="t-muted2">Activer ou désactiver la protection</small>
+                  </div>
+                  <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" role="switch" id="switchArm" checked>
+                    <label class="form-check-label" for="switchArm"><span id="switchArmLabel">Armé</span></label>
+                  </div>
+                </div>
+              </div>
+
+              <div class="card cardish p-3">
+                <div class="fw-semibold mb-1">Mode</div>
+                <small class="t-muted2 d-block mb-2">Comportement lors d’une alerte</small>
+                <div class="btn-group w-100" role="group" aria-label="Mode">
+                  <input type="radio" class="btn-check" name="mode" id="modeAgg" autocomplete="off">
+                  <label class="btn btn-outline-warning btn-grow" for="modeAgg">🔊 Agressif</label>
+
+                  <input type="radio" class="btn-check" name="mode" id="modeSil" autocomplete="off" checked>
+                  <label class="btn btn-outline-info btn-grow" for="modeSil">🤫 Silencieux</label>
+                </div>
+              </div>
+
+              <div class="card cardish p-3">
+                <div class="fw-semibold mb-1">Tests rapides</div>
+                <small class="t-muted2 d-block mb-2">Vérifier l’actionneur sans vraie alerte</small>
+                <div class="d-grid gap-2">
+                  <button id="btnTestBuzzer" class="btn btn-outline-light btn-grow" type="button">Tester le buzzer (1s)</button>
+                </div>
+              </div>
+
+              <div class="card cardish p-3">
+                <div class="fw-semibold mb-1">Alerte</div>
+                <small class="t-muted2 d-block mb-2">Stopper l’alerte en cours</small>
+                <button id="btnAck2" class="btn btn-danger btn-grow" type="button" disabled>🚨 Acquitter l’alerte</button>
+                <small class="t-muted2 d-block mt-2">
+                  Ce bouton devient actif seulement si une alerte est en cours.
+                </small>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- B) Localisation & Geofence -->
+      <div class="accordion-item cardish mt-3">
+        <h2 class="accordion-header" id="headingGps">
+          <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseGps" aria-expanded="false" aria-controls="collapseGps">
+            📍 Localisation & Géofence
+          </button>
+        </h2>
+        <div id="collapseGps" class="accordion-collapse collapse" aria-labelledby="headingGps" data-bs-parent="#sentinelAccordion">
+          <div class="accordion-body">
+
+            <div class="card cardish p-3 mb-3">
+              <div class="d-flex justify-content-between align-items-start">
+                <div>
+                  <div class="fw-semibold">Position GPS</div>
+                  <small id="gpsNote" class="t-muted2">--</small>
+                </div>
+                <span class="status-pill badge-grow">
+                  <span id="gpsFixDot" class="grow-dot dot-orange"></span>
+                  <span id="gpsFixText" class="small">--</span>
+                </span>
+              </div>
+
+              <div class="mt-3">
+                <div class="kv"><span class="t-muted2">Latitude</span><span id="gpsLat" class="mono">--</span></div>
+                <div class="kv"><span class="t-muted2">Longitude</span><span id="gpsLon" class="mono">--</span></div>
+                <div class="kv"><span class="t-muted2">Qualité</span><span id="gpsQuality" class="mono">--</span></div>
+              </div>
+
+              <div class="d-grid mt-3">
+                <a id="mapsLink" class="btn btn-outline-info btn-grow"
+                   href="#"
+                   target="_blank" rel="noopener">
+                  Ouvrir dans Google Maps
+                </a>
+              </div>
+
+              <small class="t-muted2 d-block mt-2">
+                Si pas de FIX, ATS affiche la dernière position connue (si disponible).
+              </small>
+            </div>
+
+            <!-- Geofence (V1 : affichage simple, commandes optionnelles) -->
+            <div class="card cardish p-3">
+              <div class="d-flex justify-content-between align-items-start">
+                <div>
+                  <div class="fw-semibold">Géofence</div>
+                  <small class="t-muted2">Centre + rayon</small>
+                </div>
+                <span class="status-pill badge-grow">
+                  <span id="geofenceDot" class="grow-dot dot-orange"></span>
+                  <span id="geofenceText" class="small">--</span>
+                </span>
+              </div>
+
+              <div class="mt-3">
+                <div class="kv"><span class="t-muted2">Centre</span><span id="geofenceCenter" class="mono">--</span></div>
+                <div class="kv"><span class="t-muted2">Rayon</span><span id="geofenceRadius" class="mono">--</span></div>
+                <div class="kv"><span class="t-muted2">État</span><span id="geofenceState" class="mono">--</span></div>
+              </div>
+
+              <div class="mt-3">
+                <small class="t-muted2">
+                  (V1) Le centre “Home” est défini automatiquement quand le GPS est stable (sats/HDOP OK).
+                </small>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+      <!-- C) Alertes en direct -->
+      <div class="accordion-item cardish mt-3">
+        <h2 class="accordion-header" id="headingAlerts">
+          <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseAlerts" aria-expanded="false" aria-controls="collapseAlerts">
+            🚨 Alertes en direct
+          </button>
+        </h2>
+        <div id="collapseAlerts" class="accordion-collapse collapse" aria-labelledby="headingAlerts" data-bs-parent="#sentinelAccordion">
+          <div class="accordion-body">
+
+            <!-- Bande alerte active -->
+            <div id="alertBanner" class="alert alert-danger cardish d-none" role="alert">
+              <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <div class="badge-grow">
+                  <span class="grow-dot dot-red"></span>
+                  <strong>Alerte active :</strong> <span id="alertTitle" class="mono">--</span>
+                </div>
+                <button class="btn btn-outline-light btn-sm btn-grow" type="button"
+                        data-bs-toggle="collapse" data-bs-target="#alertDetails">
+                  Voir détails
+                </button>
+              </div>
+            </div>
+
+            <!-- Pas d’alerte -->
+            <div id="noAlertBanner" class="alert alert-secondary cardish" role="alert">
+              <div class="badge-grow">
+                <span class="grow-dot dot-green"></span>
+                <strong>Aucune alerte en cours</strong>
+              </div>
+            </div>
+
+            <!-- Jumbotron détails alerte -->
+            <div id="alertDetails" class="collapse">
+              <div class="jumbo mb-3">
+                <h5 class="mb-2">Détails de l’alerte (en cours)</h5>
+                <div class="kv"><span class="t-muted2">Type</span><span id="alertType" class="mono">--</span></div>
+                <div class="kv"><span class="t-muted2">Heure</span><span id="alertTime" class="mono">--</span></div>
+                <div class="kv"><span class="t-muted2">Position</span><span id="alertPos" class="mono">--</span></div>
+                <div class="kv"><span class="t-muted2">Mode</span><span id="alertMode" class="mono">--</span></div>
+                <small class="t-muted2 d-block mt-2">
+                  (V1) Temps basé sur l’uptime. V2 : timestamp réel (GPS/RTC).
+                </small>
+              </div>
+            </div>
+
+            <!-- État capteurs (V1 : texte indicatif) -->
+            <div class="card cardish p-3">
+              <div class="fw-semibold mb-2">État des capteurs</div>
+              <div class="kv"><span class="t-muted2">SW-420 (vibration)</span><span id="capSW" class="mono">--</span></div>
+              <div class="kv"><span class="t-muted2">MPU-6050 (mouvement)</span><span id="capMPU" class="mono">--</span></div>
+              <div class="kv"><span class="t-muted2">GPS</span><span id="capGPS" class="mono">--</span></div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+      <!-- D) Système & Diagnostic -->
+      <div class="accordion-item cardish mt-3">
+        <h2 class="accordion-header" id="headingSys">
+          <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseSys" aria-expanded="false" aria-controls="collapseSys">
+            ⚙️ Système & Diagnostic
+          </button>
+        </h2>
+        <div id="collapseSys" class="accordion-collapse collapse" aria-labelledby="headingSys" data-bs-parent="#sentinelAccordion">
+          <div class="accordion-body">
+
+            <div class="card cardish p-3">
+              <div class="fw-semibold mb-2">Connexion</div>
+
+              <div class="kv">
+                <span class="t-muted2">Broker (HiveMQ)</span>
+                <span id="mqttState" class="mono">--</span>
+              </div>
+
+              <div class="kv">
+                <span class="t-muted2">Dernière mise à jour</span>
+                <span id="lastUpdate" class="mono">--</span>
+              </div>
+            </div>
+
+            <div class="card cardish p-3 mt-3">
+              <div class="fw-semibold mb-2">État système</div>
+              <div class="kv"><span class="t-muted2">Uptime</span><span id="uptime" class="mono">--</span></div>
+              <div class="kv"><span class="t-muted2">Version</span><span id="fwVersion" class="mono">V1.0</span></div>
+            </div>
+
+            <div class="d-grid gap-2 mt-3">
+              <button id="btnRestart" class="btn btn-outline-warning btn-grow" type="button" disabled>Redémarrer ESP32 (V1: via MQTT plus tard)</button>
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <footer class="text-center mt-4">
+      <small class="t-muted2">Anti-Theft Sentinel — Dashboard V1 (MQTT temps réel via HiveMQ Cloud)</small>
+    </footer>
+  </main>
+
+  <!-- MQTT.js -->
+  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+
+  <script>
+    // =========================
+    // CONFIG À REMPLIR
+    // =========================
+    const DEVICE_ID = "ATS001";
+
+    const WS_URL =
+    "wss://ebc0bfec4d9b44dd809dd1925926634f.s1.eu.hivemq.cloud:8884/mqtt";
+
+    const USER = "ATS001";
+    const PASS = "ATSpass01";
+
+    const T_STATUS = `ats/${DEVICE_ID}/status`;
+    const T_GPS    = `ats/${DEVICE_ID}/gps`;
+    const T_ALERT  = `ats/${DEVICE_ID}/alert`;
+    const T_CMD    = `ats/${DEVICE_ID}/cmd`;
+
+    // =========================
+    // UI refs
+    // =========================
+    const el = (id) => document.getElementById(id);
+
+    const lastActivity = el("lastActivity");
+    const lastUpdate   = el("lastUpdate");
+
+    const pillAlertDot  = el("pillAlertDot");
+    const pillAlertText = el("pillAlertText");
+    const pillDashDot   = el("pillDashDot");
+    const pillDashText  = el("pillDashText");
+
+    const modeText   = el("modeText");
+    const armedText  = el("armedText");
+    const switchArm  = el("switchArm");
+    const switchArmLabel = el("switchArmLabel");
+    const modeAgg    = el("modeAgg");
+    const modeSil    = el("modeSil");
+
+    const btnAck   = el("btnAck");
+    const btnAck2  = el("btnAck2");
+    const btnTestBuzzer = el("btnTestBuzzer");
+
+    const gpsFixDot = el("gpsFixDot");
+    const gpsFixText = el("gpsFixText");
+    const gpsNote = el("gpsNote");
+    const gpsLat = el("gpsLat");
+    const gpsLon = el("gpsLon");
+    const gpsQuality = el("gpsQuality");
+    const mapsLink = el("mapsLink");
+
+    const geofenceDot = el("geofenceDot");
+    const geofenceText = el("geofenceText");
+    const geofenceCenter = el("geofenceCenter");
+    const geofenceRadius = el("geofenceRadius");
+    const geofenceState = el("geofenceState");
+
+    const alertBanner = el("alertBanner");
+    const noAlertBanner = el("noAlertBanner");
+    const alertTitle = el("alertTitle");
+    const alertType = el("alertType");
+    const alertTime = el("alertTime");
+    const alertPos = el("alertPos");
+    const alertMode = el("alertMode");
+
+    const capSW = el("capSW");
+    const capMPU = el("capMPU");
+    const capGPS = el("capGPS");
+
+    const mqttState = el("mqttState");
+    const uptime = el("uptime");
+
+    // =========================
+    // Helpers UI
+    // =========================
+    function setDot(dotEl, cls) {
+      if (!dotEl) return;
+      dotEl.classList.remove("dot-green","dot-orange","dot-red");
+      dotEl.classList.add(cls);
+    }
+
+    function nowHHMMSS() {
+      const d = new Date();
+      return d.toLocaleTimeString("fr-FR", {hour12:false});
+    }
+
+    function setLastActivity(label) {
+      if (lastActivity) lastActivity.textContent = label;
+      if (lastUpdate) lastUpdate.textContent = nowHHMMSS();
+    }
+
+    function setAckButtons(active) {
+      const apply = (btn) => {
+        if (!btn) return;
+        if (active) {
+          btn.classList.remove("btn-outline-secondary");
+          btn.classList.add("btn-danger");
+          btn.disabled = false;
+          btn.textContent = "🚨 Acquitter l’alerte";
+        } else {
+          btn.classList.remove("btn-danger");
+          btn.classList.add("btn-outline-secondary");
+          btn.disabled = true;
+          btn.textContent = "Aucune alerte";
+        }
+      };
+      apply(btnAck);
+      apply(btnAck2);
+    }
+
+    function showAlertUI(active) {
+      if (active) {
+        alertBanner?.classList.remove("d-none");
+        noAlertBanner?.classList.add("d-none");
+      } else {
+        alertBanner?.classList.add("d-none");
+        noAlertBanner?.classList.remove("d-none");
+      }
+    }
+
+    function publishCmd(obj, qos=1) {
+      if (!client || !client.connected) return;
+      client.publish(T_CMD, JSON.stringify(obj), { qos });
+    }
+
+    // =========================
+    // MQTT connect
+    // =========================
+    const client = mqtt.connect(WS_URL, {
+      username: USER,
+      password: PASS,
+      clean: true,
+      reconnectPeriod: 1500,
+      connectTimeout: 8000
+    });
+
+    client.on("connect", () => {
+      setDot(pillDashDot, "dot-green");
+      if (pillDashText) pillDashText.textContent = "Dashboard connecté";
+      if (mqttState) mqttState.textContent = "CONNECTÉ";
+
+      client.subscribe([T_STATUS, T_GPS, T_ALERT], { qos: 1 });
+      setLastActivity("connecté");
+    });
+
+    client.on("reconnect", () => {
+      setDot(pillDashDot, "dot-orange");
+      if (pillDashText) pillDashText.textContent = "Reconnexion…";
+      if (mqttState) mqttState.textContent = "RECONNEXION";
+    });
+
+    client.on("close", () => {
+      setDot(pillDashDot, "dot-red");
+      if (pillDashText) pillDashText.textContent = "Déconnecté";
+      if (mqttState) mqttState.textContent = "DÉCONNECTÉ";
+    });
+
+    client.on("error", (err) => {
+      setDot(pillDashDot, "dot-red");
+      if (pillDashText) pillDashText.textContent = "Erreur";
+      if (mqttState) mqttState.textContent = "ERREUR";
+      console.log("MQTT error:", err);
+    });
+
+    // =========================
+    // State cache
+    // =========================
+    let state = {
+      armed: null,
+      mode: null,
+      alertActive: false,
+      uptime_s: null,
+      gps: { fix:false, lastFix:false, lat:0, lon:0, sats:0, hdop:99, note:"" },
+      lastAlert: { reason:"", ts:null }
+    };
+
+    // =========================
+    // Message handlers
+    // =========================
+    client.on("message", (topic, message) => {
+      let data;
+      try { data = JSON.parse(message.toString()); }
+      catch(e){ return; }
+
+      setLastActivity("à l’instant");
+
+      if (topic === T_STATUS) {
+        if (typeof data.armed === "boolean") state.armed = data.armed;
+        if (typeof data.mode === "string") state.mode = data.mode;
+        if (typeof data.alertActive === "boolean") state.alertActive = data.alertActive;
+        if (typeof data.uptime_s === "number") state.uptime_s = data.uptime_s;
+
+        // UI
+        if (switchArm && typeof state.armed === "boolean") {
+          switchArm.checked = state.armed;
+          if (switchArmLabel) switchArmLabel.textContent = state.armed ? "Armé" : "Désarmé";
+          if (armedText) armedText.textContent = state.armed ? "Armé" : "Désarmé";
+        }
+
+        if (typeof state.mode === "string") {
+          const isAgg = (state.mode === "aggressive");
+          if (modeAgg) modeAgg.checked = isAgg;
+          if (modeSil) modeSil.checked = !isAgg;
+          if (modeText) modeText.textContent = isAgg ? "Agressif" : "Silencieux";
+          if (alertMode) alertMode.textContent = isAgg ? "Agressif" : "Silencieux";
+        }
+
+        // Alert pill + buttons + banners
+        setDot(pillAlertDot, state.alertActive ? "dot-red" : "dot-green");
+        if (pillAlertText) pillAlertText.textContent = state.alertActive ? "Alerte" : "OK";
+        setAckButtons(state.alertActive);
+        showAlertUI(state.alertActive);
+
+        // uptime
+        if (uptime && state.uptime_s != null) {
+          const s = state.uptime_s;
+          const hh = String(Math.floor(s/3600)).padStart(2,"0");
+          const mm = String(Math.floor((s%3600)/60)).padStart(2,"0");
+          const ss = String(s%60).padStart(2,"0");
+          uptime.textContent = `${hh}:${mm}:${ss}`;
+        }
+
+        // Capteurs (indication simple)
+        if (capSW)  capSW.textContent  = "OK";
+        if (capMPU) capMPU.textContent = state.alertActive ? "Mouvement suspect" : "OK";
+        if (capGPS) capGPS.textContent = (state.gps.fix ? "Fix GPS" : (state.gps.lastFix ? "Pas de FIX (dernière pos.)" : "Pas de FIX"));
+      }
+
+      if (topic === T_GPS) {
+        // gps payload from firmware
+        state.gps.fix     = !!data.fix;
+        state.gps.lastFix = !!data.lastFix;
+        state.gps.lat     = Number(data.lat || 0);
+        state.gps.lon     = Number(data.lon || 0);
+        state.gps.sats    = Number(data.sats || 0);
+        state.gps.hdop    = Number(data.hdop || 99);
+        state.gps.note    = String(data.note || "");
+
+        const latOk = (state.gps.lat && !Number.isNaN(state.gps.lat));
+        const lonOk = (state.gps.lon && !Number.isNaN(state.gps.lon));
+
+        if (state.gps.fix) {
+          setDot(gpsFixDot, "dot-green");
+          if (gpsFixText) gpsFixText.textContent = "Fix GPS";
+          if (gpsNote) gpsNote.textContent = "V1 : lien Google Maps (position actuelle)";
+        } else {
+          setDot(gpsFixDot, "dot-orange");
+          if (gpsFixText) gpsFixText.textContent = state.gps.lastFix ? "Pas de FIX (dernière position)" : "Pas de FIX";
+          if (gpsNote) gpsNote.textContent = state.gps.lastFix
+            ? "GPS non fixé : affichage de la dernière position connue"
+            : "GPS non fixé : aucune position connue";
+        }
+
+        if (gpsLat) gpsLat.textContent = latOk ? state.gps.lat.toFixed(6) : "--";
+        if (gpsLon) gpsLon.textContent = lonOk ? state.gps.lon.toFixed(6) : "--";
+
+        if (gpsQuality) gpsQuality.textContent = `sats=${state.gps.sats} · HDOP=${state.gps.hdop.toFixed(2)}`;
+
+        if (mapsLink) {
+          if (latOk && lonOk) {
+            mapsLink.href = `https://www.google.com/maps?q=${state.gps.lat},${state.gps.lon}`;
+            mapsLink.classList.remove("disabled");
+          } else {
+            mapsLink.href = "#";
+          }
+        }
+
+        if (capGPS) capGPS.textContent = (state.gps.fix ? "Fix GPS" : (state.gps.lastFix ? "Pas de FIX (dernière pos.)" : "Pas de FIX"));
+      }
+
+      if (topic === T_ALERT) {
+        // alert instant
+        const reason = String(data.reason || "Alerte");
+        const ts = (data.ts != null) ? Number(data.ts) : null;
+
+        state.lastAlert.reason = reason;
+        state.lastAlert.ts = ts;
+
+        // UI
+        setDot(pillAlertDot, "dot-red");
+        if (pillAlertText) pillAlertText.textContent = "Alerte";
+
+        setAckButtons(true);
+        showAlertUI(true);
+
+        if (alertTitle) alertTitle.textContent = reason;
+        if (alertType) alertType.textContent = reason;
+
+        if (alertTime) {
+          if (ts != null && !Number.isNaN(ts)) alertTime.textContent = `${ts}s (uptime)`;
+          else alertTime.textContent = "--";
+        }
+
+        if (alertPos) {
+          if (state.gps.lastFix) alertPos.textContent = `${state.gps.lat.toFixed(6)}, ${state.gps.lon.toFixed(6)}`;
+          else alertPos.textContent = "--";
+        }
+
+        // Capteurs
+        if (capMPU) capMPU.textContent = "Mouvement suspect";
+      }
+    });
+
+    // =========================
+    // UI -> MQTT commands
+    // =========================
+    btnAck?.addEventListener("click", () => publishCmd({cmd:"ack"}, 1));
+    btnAck2?.addEventListener("click", () => publishCmd({cmd:"ack"}, 1));
+
+    switchArm?.addEventListener("change", () => {
+      publishCmd({cmd:"arm", value: !!switchArm.checked}, 1);
+    });
+
+    modeAgg?.addEventListener("change", () => {
+      if (modeAgg.checked) publishCmd({cmd:"mode", value:"aggressive"}, 1);
+    });
+
+    modeSil?.addEventListener("change", () => {
+      if (modeSil.checked) publishCmd({cmd:"mode", value:"silent"}, 1);
+    });
+
+    btnTestBuzzer?.addEventListener("click", () => {
+      publishCmd({cmd:"test_buzzer", value: 1000}, 1);
+    });
+
+    // =========================
+    // Valeurs par défaut affichées
+    // =========================
+    setAckButtons(false);
+    showAlertUI(false);
+    if (armedText) armedText.textContent = "--";
+    if (modeText) modeText.textContent = "--";
+    if (pillAlertText) pillAlertText.textContent = "Inconnu";
+    if (lastActivity) lastActivity.textContent = "--";
+
+    // Geofence (V1 : placeholders)
+    if (geofenceText) geofenceText.textContent = "N/A (V1)";
+    setDot(geofenceDot, "dot-orange");
+    if (geofenceCenter) geofenceCenter.textContent = "--";
+    if (geofenceRadius) geofenceRadius.textContent = "--";
+    if (geofenceState) geofenceState.textContent = "Auto (V1)";
+  </script>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
